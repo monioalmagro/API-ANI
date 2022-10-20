@@ -1,6 +1,9 @@
 import csv
 import json
 from datetime import datetime, timedelta
+import requests
+from requests.structures import CaseInsensitiveDict
+
 
 
 def read_csv():
@@ -10,8 +13,26 @@ def read_csv():
             data:dict = procces_data(row)
             data_json = json.dumps(data)
             print(data_json)
+            post_to_api(data_json)
 
 
+#############################  POST TO API     ###########################
+
+
+def post_to_api(data):
+    url = "http://desktop-l4fsbsj:17000/FacturadorVenta/registrar?"
+
+    headers = CaseInsensitiveDict()
+    headers["Accept"] = "application/json"
+    headers["Content-Type"] = "application/json"
+    headers["ApiAuthorization"] = "3612a301-3803-4593-91bd-abbd7f08b205"
+    headers["Company"] = "1"
+
+    resp = requests.post(url, headers=headers, data=data)
+
+    print(resp.status_code)
+
+#############################  PROCCES DATA     ###########################
 
 def procces_data(row):
     dict_data: dict = {}
@@ -48,6 +69,9 @@ def procces_data(row):
         print(e)
 
 
+#############################  CURRENT ACCOUNT     ###########################
+
+
 def cc_amount(row) -> dict:
     importe = float(row[10])
     return {"importe" : importe}
@@ -65,6 +89,10 @@ def return_current_account(row)-> dict:
     return {
         "cuotasCuentaCorriente": [dic_cc]
     }
+
+
+#############################  PERCEPTIONS     ###############################
+
 
 def perceptions_aliquot(row)-> dict:
     if row[19] != 0:
@@ -86,11 +114,11 @@ def perceptions_base(row)-> dict:
 
 
 def perceptions_amount(row)-> dict:
-    importe = float(row[24])
+    importe = float(row[19])
     return {"importe": importe}
 
 
-def perceptions_aliquot_2(row)-> dict:
+def perceptions_aliquot_agip(row)-> dict:
     if float(row[21]) == 1.5:
         codigoAlicuota = 1
     if float(row[21]) == 2:
@@ -130,48 +158,73 @@ def perceptions_aliquot_2(row)-> dict:
     if float(row[21]) == 0.75:
         codigoAlicuota = 19
     else:
-        return {"codigoAlicuota": "ERROR_(codigoAlicuota)"}
+        return {"codigoAlicuota": "ERROR"} # TODO   
 
     return {"codigoAlicuota": (codigoAlicuota)}
 
 
-def perceptions_code_2()-> dict:
+def perceptions_code_agip()-> dict:
     return {"codigoPercepcion": "AR"}
 
 
-def perceptions_percentage_2(row)-> dict:
+def perceptions_percentage_agip(row)-> dict:
     porcentaje = float(row[21])
     return {"porcentaje": porcentaje}
 
 
-def perceptions_base_2(row)-> dict:
+def perceptions_base_agip(row)-> dict:
     base = float(row[24])
     return {"base": base}
 
 
-def perceptions_amount_2(row)-> dict:
+def perceptions_amount_agip(row)-> dict:
     importe = float(row[22])
     return {"importe": importe}
 
 
-def items_perceptions(row)-> dict:
-    #if row[19] and row[22]:
-    dic_perceptions: dict = {}
-    dic_perceptions.update(perceptions_aliquot(row))
-    dic_perceptions.update(perceptions_code())
-    dic_perceptions.update(perceptions_percentage(row))
-    dic_perceptions.update(perceptions_base(row))
-    dic_perceptions.update(perceptions_amount(row))
-    dic_perceptions_2: dict = {}
-    dic_perceptions_2.update(perceptions_aliquot_2(row))
-    dic_perceptions_2.update(perceptions_code_2())
-    dic_perceptions_2.update(perceptions_percentage_2(row))
-    dic_perceptions_2.update(perceptions_base_2(row))
-    dic_perceptions_2.update(perceptions_amount_2(row))
-    return {
-        "percepciones": [dic_perceptions, dic_perceptions_2]
-        } #TODO
+def perceptions_arba(row) -> dict:
+    # ARBA
+    dic_perceptions_arba: dict = {}
+    dic_perceptions_arba.update(perceptions_aliquot(row))
+    dic_perceptions_arba.update(perceptions_code()) 
+    dic_perceptions_arba.update(perceptions_percentage(row))
+    dic_perceptions_arba.update(perceptions_base(row))
+    dic_perceptions_arba.update(perceptions_amount(row))
+    return dic_perceptions_arba
 
+def perceptions_agip(row) -> dict:
+    # AGIP
+    dic_perceptions_agip: dict = {}
+    dic_perceptions_agip.update(perceptions_aliquot_agip(row))
+    dic_perceptions_agip.update(perceptions_code_agip())
+    dic_perceptions_agip.update(perceptions_percentage_agip(row))
+    dic_perceptions_agip.update(perceptions_base_agip(row))
+    dic_perceptions_agip.update(perceptions_amount_agip(row))
+    return dic_perceptions_agip
+
+
+
+def items_perceptions(row):
+    if row[19] == 0 and row[22] == 0:
+        return None
+    if row[19] != 0 and row[22] == 0:
+        arba: dict = perceptions_arba(row)
+        return {
+        "percepciones": [arba]
+            }
+    if row[19] == 0 and row[22] != 0:
+        agip: dict = perceptions_agip(row)
+        return {
+            "percepciones": [agip]
+        }
+    if row[19] != 0 and row[22] != 0:
+        arba: dict = perceptions_arba(row)
+        agip: dict = perceptions_agip(row)
+        return {
+            "percepciones": [arba, agip]
+        }
+
+############################      ITEMS    ###################################
 
 def items_amount_iva(row) -> dict:
     if float(row[16]) != 0:
@@ -237,12 +290,16 @@ def returns_items(row) -> dict:
     dic_items.update(items_amount(row))
     dic_items.update(items_amount_without_taxes(row))
     dic_items.update(items_amount_iva(row))
-    dic_items.update(items_perceptions(row))
+    if items_perceptions(row):
+        dic_items.update(items_perceptions(row))
     dic_return = {
         "items": [dic_items]
     }
 
     return dic_return
+
+
+#############################  JSON        ##################################
 
 
 def return_constant_dic() -> dict:
@@ -421,15 +478,139 @@ def code_sale(row) -> dict:
 
 
 def client_code(row) -> dict:
-    client_code = "{}{}".format("0", str(row[0]))
-    dic = {"codigoCliente": client_code}  # TODO
+    client_code = "{}{}".format(str(row[0])," ")
+    dic = {"codigoCliente": client_code}
     return dic
 
 
 def voucher_code(row) -> dict:
-    dic: dict = {}
-    dic = {"codigoTalonario": "1"}  # TODO
-    return dic
+    talonario = row[25]
+    letra = talonario[1]
+    pv = talonario[2:7]
+    tcomp = row[1]
+    if tcomp == "FAC" and letra == "A" and pv == "00003":
+        talonario = 90
+
+    if tcomp == "FAC"  and letra == "A"  and  pv =="00003":
+        talonario=90
+
+    if tcomp == "FAC"  and letra == "A"  and  pv =="00010":
+        talonario=80
+
+    if tcomp == "FAC"  and letra == "A"  and  pv =="00014"   :
+        talonario=70
+
+    if tcomp == "FAC"  and letra == "A"  and  pv =="00017"   :
+        talonario=180
+
+    if tcomp == "FAC"  and letra == "A"  and  pv =="00018"   :
+        talonario=170
+
+    if tcomp == "FAC"  and letra == "A"  and  pv =="00019"   :
+        talonario=190
+
+    if tcomp == "FAC"  and letra == "B"  and  pv =="00003"   :
+        talonario=91
+
+    if tcomp == "FAC"  and letra == "B"  and  pv =="00010"   :
+        talonario=81
+
+    if tcomp == "FAC"  and letra == "B"  and  pv =="00014"   :
+        talonario=71
+
+    if tcomp == "FAC"  and letra == "B"  and  pv =="00017"   :
+        talonario=181
+
+    if tcomp == "FAC"  and letra == "B"  and  pv =="00018"   :
+        talonario=171
+
+    if tcomp == "FAC"  and letra == "E"  and  pv =="00006"   :
+        talonario=96
+
+    if tcomp == "FAC"  and letra == "E"  and  pv =="00013"   :
+        talonario=76
+
+    if tcomp == "CRE"  and letra == "A"  and  pv =="00009" :  
+        talonario=62
+
+    if tcomp == "CRE"  and letra == "A"  and  pv =="00010"  : 
+        talonario=82
+
+    if tcomp == "CRE"  and letra == "A"  and  pv =="00014"   :
+        talonario=72
+
+    if tcomp == "CRE"  and letra == "A"  and  pv =="00003"   :
+        talonario=94
+
+    if tcomp == "CRE"  and letra == "A"  and  pv =="00017"   :
+        talonario=182
+
+    if tcomp == "CRE"  and letra == "A"  and  pv =="00018"  : 
+        talonario=172
+
+    if tcomp == "CRE"  and letra == "A"  and  pv =="00019"   :
+        talonario=192
+
+    if tcomp == "CRE"  and letra == "B"  and  pv =="00010"   :
+        talonario=83
+
+    if tcomp == "CRE"  and letra == "B"  and  pv =="00014"   :
+        talonario=73
+
+    if tcomp == "CRE"  and letra == "B"  and  pv =="00017"   :
+        talonario=183
+
+    if tcomp == "CRE"  and letra == "B"  and  pv =="00018"   :
+        talonario=173
+
+    if tcomp == "CRE"  and letra == "E"  and  pv =="00006"   :
+        talonario=97
+
+    if tcomp == "CRE"  and letra == "E"  and  pv =="00013"   :
+        talonario=77
+
+    if tcomp == "DEB"  and letra == "A"  and  pv =="00003"   :
+        talonario=94
+
+    if tcomp == "DEB"  and letra == "A"  and  pv =="00019"   :
+        talonario=194
+
+    if tcomp == "DEB"  and letra == "A"  and  pv =="00010"   :
+        talonario=84
+
+    if tcomp == "DEB"  and letra == "A"  and  pv =="00014"   :
+        talonario=74
+
+    if tcomp == "DEB"  and letra == "A"  and  pv =="00017"   :
+        talonario=184
+
+    if tcomp == "DEB"  and letra == "A"  and  pv =="00018":   
+        talonario=174
+
+    if tcomp == "DEB"  and letra == "A"  and  pv =="00009" :  
+        talonario=63
+
+    if tcomp == "DEB"  and letra == "B"  and  pv =="00010" :  
+        talonario=85
+
+    if tcomp == "DEB"  and letra == "B"  and  pv =="00014" :  
+        talonario=75
+
+    if tcomp == "DEB"  and letra == "B"  and  pv =="00017" :  
+        talonario=185
+
+    if tcomp == "DEB"  and letra == "B"  and  pv =="00018" :  
+        talonario=175
+
+    if tcomp == "DEB"  and letra == "E"  and  pv =="00006" :  
+        talonario=98
+
+    if tcomp == "DEB"  and letra == "E"  and  pv =="00013" :  
+        talonario=78
+    else:
+        return {"codigoTalonario": "ERROR"}
+    
+    return {"codigoTalonario": talonario}  # TODO
 
 
 def number_voucher(row) -> dict:
