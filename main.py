@@ -13,7 +13,7 @@ def read_csv():
             data: dict = procces_data(row)
             data_json = json.dumps(data)
             print(data_json)
-            # post_to_api(data_json)
+            post_to_api(data_json)
 
 
 # +++++++++++++++++++++  POST TO API     +++++++++++++++++++++++++++++++++++++
@@ -66,9 +66,10 @@ def procces_data(row):
         dict_data.update(return_constant_dic())
         dict_data.update(returns_items(row))
         dict_data.update(return_current_account(row))
-        return dict_data
+        return [dict_data]
     except Exception as e:
         print(e)
+        return []
 
 
 # +++++++++++++++++++  CURRENT ACCOUNT     +++++++++++++++++++++++++++++++++++
@@ -157,8 +158,6 @@ def perceptions_aliquot_agip(row) -> dict:
         codigoAlicuota = 18
     if float(row[21]) == 0.75:
         codigoAlicuota = 19
-    else:
-        return {"codigoAlicuota": "ERROR"}  # TODO
 
     return {"codigoAlicuota": (codigoAlicuota)}
 
@@ -205,15 +204,17 @@ def perceptions_agip(row) -> dict:
 
 
 def items_perceptions(row):
-    if row[19] == 0 and row[22] == 0:
+    a = float(row[19])
+    b = float(row[22])
+    if a == 0 and b == 0:
         return None
-    if row[19] != 0 and row[22] == 0:
+    if a != 0 and b == 0:
         arba: dict = perceptions_arba(row)
         return {"percepciones": [arba]}
-    if row[19] == 0 and row[22] != 0:
+    if a == 0 and b != 0:
         agip: dict = perceptions_agip(row)
         return {"percepciones": [agip]}
-    if row[19] != 0 and row[22] != 0:
+    if a != 0 and b != 0:
         arba: dict = perceptions_arba(row)
         agip: dict = perceptions_agip(row)
         return {"percepciones": [arba, agip]}
@@ -346,7 +347,7 @@ def totally_exempt(row) -> dict:
 
 def total_without_taxes(row) -> dict:
     total_without_taxes = row[7]
-    dic: dict = {"totalSinImpuestos:": float(total_without_taxes)}
+    dic: dict = {"totalSinImpuestos": float(total_without_taxes)}
     return dic
 
 
@@ -379,10 +380,10 @@ def is_money_foreign(row) -> dict:
 
 def legend_2_to_5() -> dict:
     return {
-        "leyenda2": "Leyenda 2",
-        "leyenda3": "Leyenda 3",
-        "leyenda4": "Leyenda 4",
-        "leyenda5": "Leyenda 5",
+        "leyenda2": None,
+        "leyenda3": None,
+        "leyenda4": None,
+        "leyenda5": None,
     }
 
 
@@ -431,22 +432,22 @@ def vendor_code(row) -> dict:
 
 def deposit_code(row) -> dict:
     dic: dict = {
-        "codigoDeposito": "1",
+        "codigoDeposito": " 1",
     }
     return dic
 
 
 def code_list_price(row) -> dict:
     if client_code(row).get("codigoCliente") == "50007" or row[4] == "T":
-        code_list_price = 1
+        code_list_price = "1"
     else:
-        code_list_price = 11
+        code_list_price = "11"
     dic = {"codigoListaPrecio": code_list_price}
     return dic
 
 
 def voucher_date(row) -> dict:
-    date = datetime.strptime(row[3], "%d/%m/%y")
+    date = datetime.strptime(row[3], "%d/%m/%Y")
     iso_date = date.isoformat()
     one_day_before = date - timedelta(days=1)
     one_day_before_iso = one_day_before.isoformat()
@@ -467,7 +468,7 @@ def operation_code(row) -> dict:
 
 def code_sale(row) -> dict:
     dic: dict = {}
-    dic = {"codigoCondicionDeVenta": row[13]}
+    dic = {"codigoCondicionDeVenta": int(row[13])}
     return dic
 
 
@@ -479,12 +480,10 @@ def client_code(row) -> dict:
 
 def voucher_code(row) -> dict:
     talonario = row[25]
-    letra = talonario[1]
-    pv = talonario[2:7]
+    letra = talonario[0]
+    pv = talonario[1:6]
     tcomp = row[1]
-    if tcomp == "FAC" and letra == "A" and pv == "00003":
-        talonario = 90
-
+    
     if tcomp == "FAC" and letra == "A" and pv == "00003":
         talonario = 90
 
@@ -601,28 +600,24 @@ def voucher_code(row) -> dict:
 
     if tcomp == "DEB" and letra == "E" and pv == "00013":
         talonario = 78
-    else:
-        return {"codigoTalonario": "ERROR"}
 
-    return {"codigoTalonario": talonario}  # TODO
+    return {"codigoTalonario": str(talonario)}  # TODO
 
 
 def number_voucher(row) -> dict:
     dic: dict = {}
-    voucher_number = row[25].replace('"', "")
+    voucher_number = row[25][:14]
     dic = {"numeroComprobante": voucher_number}
-    if len(row[25]) == 16:
-        return dic
-    return {"numeroComprobante": "ERROR"}
+    return dic
 
 
 def code_type_voucher(row) -> dict:
     dic: dict = {}
     if row[1] == "FAC":
         dic = {"codigoTipoComprobante": "FAC"}
-    elif row[1] == "CRE":
+    elif row[1] == "NC":
         dic = {"codigoTipoComprobante": "04"}
-    elif row[1] == "DEB":
+    elif row[1] == "ND":
         dic = {"codigoTipoComprobante": "05"}
     return dic
 
