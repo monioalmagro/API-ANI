@@ -10,10 +10,22 @@ def read_csv():
     with open("./invoice.csv", "r") as file:
         csvreader = csv.reader(file)
         for row in csvreader:
-            data: dict = procces_data(row)
-            data_json = json.dumps(data)
-            print(data_json)
-            post_to_api(data_json)
+            status, data = procces_data(row)
+            if status:
+                data_json = json.dumps(data)
+                status_code = post_to_api(data_json)
+                report(status, data, status_code)
+            else:
+                report(status, row, data)
+
+
+def report(status, data, code=None):
+    with open('logs.txt', 'a') as f:
+        if code:
+            log = "\n{}--{}--{}".format(str(status), str(data), str(code))
+        else:
+            log = "\n{}--{}--{}".format(str(status), str(code), str(data))
+        f.write(log)
 
 
 # +++++++++++++++++++++  POST TO API     +++++++++++++++++++++++++++++++++++++
@@ -30,7 +42,7 @@ def post_to_api(data):
 
     resp = requests.post(url, headers=headers, data=data)
 
-    print(resp.status_code)
+    return resp.status_code
 
 
 # +++++++++++++++++++++++  PROCCES DATA    +++++++++++++++++++++++++++++++++++
@@ -66,10 +78,9 @@ def procces_data(row):
         dict_data.update(return_constant_dic())
         dict_data.update(returns_items(row))
         dict_data.update(return_current_account(row))
-        return [dict_data]
-    except Exception as e:
-        print(e)
-        return []
+        return True, [dict_data]
+    except Exception as error:
+        return False , error
 
 
 # +++++++++++++++++++  CURRENT ACCOUNT     +++++++++++++++++++++++++++++++++++
