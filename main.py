@@ -10,7 +10,8 @@ from requests.structures import CaseInsensitiveDict
 def process():
     list_row_json = read_csv()
     process_invoices = preparate_invoices(list_row_json)
-    send_to_api = process_api(process_invoices)
+    process_api(process_invoices)
+    os.remove("./invoice.csv")
 
 
 def process_api(process_invoices):
@@ -21,7 +22,7 @@ def process_api(process_invoices):
 
 
 def proccess_response(body):
-    if succes := body.get("Succeeded"):
+    if body.get("Succeeded"):
         report(True, body)
     else:
         report(False, body)
@@ -35,7 +36,7 @@ def preparate_invoices(list):
         invoice = list_aux[0]
         list_aux = list_aux[1:]
         for row in list_aux:
-            if check_number(row)  == number:
+            if check_number(row) == number:
                 item = extraer_items(row)
                 invoice[0]["items"].append(item)
                 list_aux.remove(row)
@@ -65,16 +66,16 @@ def read_csv():
 def extraer_items(row):
     return row[0].get("items")[0]
 
-def number_boucher(listing):
-        return listing[0][0].get("numeroComprobante")
 
+def number_boucher(listing):
+    return listing[0][0].get("numeroComprobante")
 
 
 def report(status, data):
     logs_path = "./logs.txt"
     time = (datetime.now()).isoformat()
 
-    with open(logs_path, 'a') as f:
+    with open(logs_path, "a") as f:
         log = f"\n{str(time)}--{str(status)}--{str(data)}"
         f.write(log)
 
@@ -115,7 +116,7 @@ def procces_data(row):
         dict_data.update(accounting_seat(row))
         dict_data.update(legend_1(row))
         dict_data.update(legend_2_to_5())
-        dict_data.update(profile_code(row)) 
+        dict_data.update(profile_code(row))
         dict_data.update(is_money_foreign(row))
         dict_data.update(quotation(row))
         dict_data.update(total_foreign_currency(row))
@@ -130,7 +131,7 @@ def procces_data(row):
         dict_data.update(return_current_account(row))
         return True, [dict_data]
     except Exception as error:
-        return False , error
+        return False, error
 
 
 # +++++++++++++++++++  CURRENT ACCOUNT     +++++++++++++++++++++++++++++++++++
@@ -295,17 +296,17 @@ def items_amount_iva(row) -> dict:
 
 def items_amount_without_taxes(row) -> dict:
     items_without_taxes = float(row[24])
-    return {"importeSinImpuestos": format(items_without_taxes, '.2f')}
+    return {"importeSinImpuestos": format(items_without_taxes, ".2f")}
 
 
 def items_amount(row) -> dict:
     amount = float(row[24])
-    return {"importe": format(amount, '.2f')}
+    return {"importe": format(amount, ".2f")}
 
 
 def items_price(row) -> dict:
     price = float(row[24])
-    return {"precio": format(price, '.2f')}
+    return {"precio": format(price, ".2f")}
 
 
 def items_code_um() -> dict:
@@ -391,7 +392,7 @@ def sub_total_without_taxes(row) -> dict:
 
 def sub_total(row) -> dict:
     sub_total = float(row[7]) + float(row[9]) + float(row[8])
-    dic: dict = {"subtotal": format(sub_total, '.2f')}
+    dic: dict = {"subtotal": format(sub_total, ".2f")}
     return dic
 
 
@@ -433,7 +434,7 @@ def quotation(row) -> dict:
 
 def profile_code(row) -> dict:
     search_letter = row[4]
-    
+
     if "T" in search_letter:
         profile_number = "5"
     else:
@@ -469,7 +470,6 @@ def legend_1(row) -> dict:
     legend = row[2]
     dic: dict = {"leyenda1": legend}
     return dic
-
 
 
 def accounting_seat(row) -> dict:
@@ -565,7 +565,7 @@ def voucher_code(row) -> dict:
     letra = talonario[0]
     pv = talonario[1:6]
     tcomp = row[1]
-    
+
     if tcomp == "FAC" and letra == "A" and pv == "00003":
         talonario = 90
 
