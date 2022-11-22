@@ -1,30 +1,81 @@
 import csv
 import json
+import os
 from datetime import datetime, timedelta
 
 import requests
 from requests.structures import CaseInsensitiveDict
 
 
+def process():
+    list_row_json = read_csv()
+    process_invoices = preparate_invoices(list_row_json)
+    send_to_api = process_api(process_invoices)
+
+
+def process_api(process_invoices):
+    for invoice in process_invoices:
+        json_data = json.dumps(invoice)
+        body = post_to_api(json_data)
+        proccess_response(body)
+
+
+def proccess_response(body):
+    if succes := body.get("Succeeded"):
+        report(True, body)
+    else:
+        report(False, body)
+
+
+def preparate_invoices(list):
+    list_aux = list
+    list_to_return = []
+    while len(list_aux) > 0:
+        number = number_boucher(list)
+        invoice = list_aux[0]
+        list_aux = list_aux[1:]
+        for row in list_aux:
+            if check_number(row)  == number:
+                item = extraer_items(row)
+                invoice[0]["items"].append(item)
+                list_aux.remove(row)
+        list_to_return.append(invoice)
+    return list_to_return
+
+
+def check_number(row):
+    return row[0].get("numeroComprobante")
+
+
 def read_csv():
-    with open("./invoice.csv", "r") as file:
-        csvreader = csv.reader(file)
-        for row in csvreader:
+    listing = []
+    invoice_path = "./invoice.csv"
+
+    with open(invoice_path, "r") as file:
+        csv_reader = csv.reader(file)
+        for row in csv_reader:
             status, data = procces_data(row)
             if status:
-                data_json = json.dumps(data)
-                status_code = post_to_api(data_json)
-                report(status, data, status_code)
+                listing.append(data)
             else:
-                report(status, row, data)
+                report(status, data)
+    return listing
 
 
-def report(status, data, code=None):
-    with open('logs.txt', 'a') as f:
-        if code:
-            log = "\n{}--{}--{}".format(str(status), str(data), str(code))
-        else:
-            log = "\n{}--{}--{}".format(str(status), str(code), str(data))
+def extraer_items(row):
+    return row[0].get("items")[0]
+
+def number_boucher(listing):
+        return listing[0][0].get("numeroComprobante")
+
+
+
+def report(status, data):
+    logs_path = "./logs.txt"
+    time = (datetime.now()).isoformat()
+
+    with open(logs_path, 'a') as f:
+        log = f"\n{str(time)}--{str(status)}--{str(data)}"
         f.write(log)
 
 
@@ -39,10 +90,8 @@ def post_to_api(data):
     headers["Content-Type"] = "application/json"
     headers["ApiAuthorization"] = "3612a301-3803-4593-91bd-abbd7f08b205"
     headers["Company"] = "1"
-
-    resp = requests.post(url, headers=headers, data=data)
-
-    return resp.status_code
+    response = requests.post(url, headers=headers, data=data)
+    return json.loads(response.json())
 
 
 # +++++++++++++++++++++++  PROCCES DATA    +++++++++++++++++++++++++++++++++++
@@ -66,6 +115,7 @@ def procces_data(row):
         dict_data.update(accounting_seat(row))
         dict_data.update(legend_1(row))
         dict_data.update(legend_2_to_5())
+        dict_data.update(profile_code(row)) 
         dict_data.update(is_money_foreign(row))
         dict_data.update(quotation(row))
         dict_data.update(total_foreign_currency(row))
@@ -92,8 +142,9 @@ def cc_amount(row) -> dict:
 
 
 def cc_date(row) -> dict:
-    fecha = row[6]
-    return {"fechaVencimiento": fecha}
+    expiration_date = datetime.strptime(row[6], "%d/%m/%Y")
+    iso_expiration_date = expiration_date.isoformat()
+    return {"fechaVencimiento": iso_expiration_date}
 
 
 def return_current_account(row) -> dict:
@@ -243,18 +294,18 @@ def items_amount_iva(row) -> dict:
 
 
 def items_amount_without_taxes(row) -> dict:
-    importe = float(row[24])
-    return {"importeSinImpuestos": importe}
+    items_without_taxes = float(row[24])
+    return {"importeSinImpuestos": format(items_without_taxes, '.2f')}
 
 
 def items_amount(row) -> dict:
-    precio = float(row[24]) + float(row[16])
-    return {"importe": precio}
+    amount = float(row[24])
+    return {"importe": format(amount, '.2f')}
 
 
 def items_price(row) -> dict:
-    precio = float(row[24]) + float(row[16])
-    return {"precio": precio}
+    price = float(row[24])
+    return {"precio": format(price, '.2f')}
 
 
 def items_code_um() -> dict:
@@ -340,7 +391,7 @@ def sub_total_without_taxes(row) -> dict:
 
 def sub_total(row) -> dict:
     sub_total = float(row[7]) + float(row[9]) + float(row[8])
-    dic: dict = {"subtotal": sub_total}
+    dic: dict = {"subtotal": format(sub_total, '.2f')}
     return dic
 
 
@@ -380,12 +431,28 @@ def quotation(row) -> dict:
     return dic
 
 
-def is_money_foreign(row) -> dict:
-    if row[4] == "T" or int(client_code(row).get("codigoCliente")) >= 50007:
-        is_money_foreign: bool = False
+def profile_code(row) -> dict:
+    search_letter = row[4]
+    
+    if "T" in search_letter:
+        profile_number = "5"
     else:
-        is_money_foreign: bool = True
-    dic: dict = {"esMonedaExtranjera": is_money_foreign}
+        if "F" in search_letter and row[25].find("E") != -1:
+            profile_number = "6"
+        else:
+            profile_number = "7"
+    dic: dict = {"codigoPerfil": profile_number}
+    return dic
+
+
+def is_money_foreign(row) -> dict:
+    search_letter = row[4]
+
+    if "T" in search_letter:
+        money_foreign: bool = False
+    else:
+        money_foreign: bool = True
+    dic: dict = {"esMonedaExtranjera": money_foreign}
     return dic
 
 
@@ -404,11 +471,15 @@ def legend_1(row) -> dict:
     return dic
 
 
+
 def accounting_seat(row) -> dict:
-    accounting_seat = row[12].replace('"', "")
-    dic: dict = {
-        "codigoAsiento": accounting_seat,
-    }
+    search_documents = ["FAC", "ND"]
+
+    if any(document in row[1] for document in search_documents):
+        code_accounting_seat = "03"
+    else:
+        code_accounting_seat = "02"
+    dic: dict = {"codigoAsiento": code_accounting_seat}
     return dic
 
 
@@ -617,7 +688,7 @@ def voucher_code(row) -> dict:
 
 def number_voucher(row) -> dict:
     dic: dict = {}
-    voucher_number = row[25][:14]
+    voucher_number = row[25][1:14]
     dic = {"numeroComprobante": voucher_number}
     return dic
 
@@ -633,4 +704,4 @@ def code_type_voucher(row) -> dict:
     return dic
 
 
-read_csv()
+process()
