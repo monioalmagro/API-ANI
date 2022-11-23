@@ -32,7 +32,7 @@ def preparate_invoices(list):
     list_aux = list
     list_to_return = []
     while len(list_aux) > 0:
-        number = number_boucher(list)
+        number = number_boucher(list_aux)
         invoice = list_aux[0]
         list_aux = list_aux[1:]
         for row in list_aux:
