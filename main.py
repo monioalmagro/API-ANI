@@ -92,7 +92,7 @@ def post_to_api(data):
     headers["ApiAuthorization"] = "3612a301-3803-4593-91bd-abbd7f08b205"
     headers["Company"] = "1"
     response = requests.post(url, headers=headers, data=data)
-    return json.loads(response.json())
+    return response.json()
 
 
 # +++++++++++++++++++++++  PROCCES DATA    +++++++++++++++++++++++++++++++++++
@@ -688,7 +688,7 @@ def voucher_code(row) -> dict:
 
 def number_voucher(row) -> dict:
     dic: dict = {}
-    voucher_number = row[25][1:14]
+    voucher_number = row[25][:14]
     dic = {"numeroComprobante": voucher_number}
     return dic
 
