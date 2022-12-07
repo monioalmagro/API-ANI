@@ -29,20 +29,35 @@ def proccess_response(body):
 
 
 def preparate_invoices(list):
-    list_aux = list
-    list_to_return = []
-    while len(list_aux) > 0:
-        number = number_boucher(list_aux)
-        invoice = list_aux[0]
-        list_aux = list_aux[1:]
-        for row in list_aux:
-            if check_number(row) == number:
-                item = extraer_items(row)
-                invoice[0]["items"].append(item)
-                list_aux.remove(row)
-        list_to_return.append(invoice)
-    return list_to_return
+    bouchers = numbers_bouchers(list)
+    list_by_bouchers = elemets_equeals_bouchers(bouchers, list)
+    make_json = arming_json(list_by_bouchers)
+    return make_json
 
+
+def arming_json(list_by_bouchers):
+    lis = []
+    for x in list_by_bouchers:
+        lis.append(process_row(x))
+    return lis
+
+def process_row(element):
+    principal = element[0]
+    for x in range(1, (len(element))):
+        print(x)
+        item = extraer_items(element[x])
+        principal[0]["items"].append(item)
+    return principal
+
+def numbers_bouchers(list_json) -> list:
+    return {list_json[x][0].get("numeroComprobante") for x in range(len(list_json))}
+
+
+def elemets_equeals_bouchers(bouchers, list_aux):
+    return [search(x, list_aux) for x in bouchers]    
+
+def search(name, test_list):
+    return [element for element in test_list if element[0]['numeroComprobante'] == name]
 
 def check_number(row):
     return row[0].get("numeroComprobante")
